@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Prompt Optimizer",
+    "description": "Rewrites a prompt against the current project: a composer icon button and an agent tool sharpen a draft using the workspace's stack, structure, and conventions."
+  }
+}

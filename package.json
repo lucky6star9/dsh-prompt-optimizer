@@ -1,0 +1,27 @@
+{
+  "name": "@luckystar6/prompt-optimizer",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "description": "Optimizes a prompt against the current project: a composer icon button and an agent tool rewrite a draft using the workspace's stack, structure, and conventions.",
+  "license": "MIT",
+  "author": "luckystar6",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["index.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg", "test/*.mjs"],
+  "scripts": {
+    "test": "node test/parse-reply.test.mjs"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-conversation"]
+    }
+  }
+}

@@ -1,0 +1,4 @@
+- insert:
+    - id: prompt-optimizer
+      name: '@luckystar6/prompt-optimizer'
+      config: {}
