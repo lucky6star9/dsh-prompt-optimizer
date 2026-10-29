@@ -186,89 +186,73 @@ window.__ModuleLoader__.load({
         }
 
         /**
-         * Per-session panel entries. The button (in the activity seat) writes
-         * here; the panel above the composer (in the dock seat) reads. Entries
-         * are keyed by sessionId to avoid leaking across conversations, and each
-         * is one of two kinds: optimization notes, or an error message such as
-         * the empty-draft notice.
+         * A tiny per-session text channel shared between the button (in the
+         * activity seat) and a panel above the composer (in the dock seat).
+         * Both are session-scoped, so values are keyed by sessionId to avoid
+         * leaking across conversations. The plugin keeps two independent
+         * channels — notes and errors — so each panel shows, and dismisses, on
+         * its own without the other overwriting it.
+         * @param {string} what - the channel name, for log labels.
+         * @returns {{store: Map, get: (id: string) => string, set: (id: string, text: string) => void, use: (id: string|undefined) => string}} the channel.
          */
-        const entriesBySession = new Map()
-        const entryListeners = new Map()
-
-        /** Publish an entry for a session, notifying every mounted panel. */
-        const setEntry = (sessionId, kind, text) => {
-          const value = text ?? ''
-          if (value.length === 0) entriesBySession.delete(sessionId)
-          else entriesBySession.set(sessionId, { kind, text: value })
-          const listeners = entryListeners.get(sessionId)
-          if (listeners !== undefined) for (const fn of listeners) fn()
+        const makeChannel = (what) => {
+          const store = new Map()
+          const listeners = new Map()
+          const notify = (sessionId) => {
+            const fns = listeners.get(sessionId)
+            if (fns !== undefined) for (const fn of fns) fn()
+          }
+          const set = (sessionId, text) => {
+            const value = text ?? ''
+            if (value.length === 0) store.delete(sessionId)
+            else store.set(sessionId, value)
+            notify(sessionId)
+          }
+          const use = (sessionId) => {
+            const [, force] = React.useState(0)
+            React.useEffect(() => {
+              if (sessionId === undefined) return () => {}
+              let fns = listeners.get(sessionId)
+              if (fns === undefined) {
+                fns = new Set()
+                listeners.set(sessionId, fns)
+              }
+              const fn = () => force((x) => x + 1)
+              fns.add(fn)
+              return () => { fns.delete(fn) }
+            }, [sessionId])
+            return sessionId === undefined ? '' : (store.get(sessionId) ?? '')
+          }
+          return { store, get: (id) => store.get(id) ?? '', set, use }
         }
 
-        /** Publish optimization notes for a session. */
-        const setNotes = (sessionId, text) => setEntry(sessionId, 'notes', text)
+        /** Optimization notes, published when an optimization succeeds. */
+        const notesChannel = makeChannel('notes')
 
-        /** Publish an error message for a session. */
-        const setError = (sessionId, text) => setEntry(sessionId, 'error', text)
-
-        /**
-         * Subscribe to a session's entry from a component. Returns the current
-         * entry and re-renders when it changes.
-         * @param {string|undefined} sessionId - the active session.
-         * @returns {{kind: string, text: string}|null} the entry, or null when none.
-         */
-        const useEntry = (sessionId) => {
-          const [, force] = React.useState(0)
-          React.useEffect(() => {
-            if (sessionId === undefined) return () => {}
-            let listeners = entryListeners.get(sessionId)
-            if (listeners === undefined) {
-              listeners = new Set()
-              entryListeners.set(sessionId, listeners)
-            }
-            const fn = () => force((x) => x + 1)
-            listeners.add(fn)
-            return () => { listeners.delete(fn) }
-          }, [sessionId])
-          return sessionId === undefined ? null : (entriesBySession.get(sessionId) ?? null)
-        }
+        /** Error notices, published when an optimization cannot even start. */
+        const errorChannel = makeChannel('error')
 
         /**
-         * A full-width panel rendered above the composer (in the dock seat) that
-         * shows this plugin's messages: optimization notes, or an error such as
-         * the empty-draft notice. It appears only while an entry exists for
-         * the session and dismisses on its close button.
-         * @param {object} props - the slot's standard props.
-         * @returns {object|null} the React element, or null when there is no entry.
+         * The shell the two dock panels share: a full-width strip above the
+         * composer card, capped to the card's own max-width (the same CSS
+         * variable the host's .Q7WfXG_card uses) and centered, so it never
+         * reads wider than the input box beneath it, with a close button.
+         * @param {object} parts - the per-panel parts.
+         * @param {string|null} parts.role - the ARIA role, or null for none.
+         * @param {string} parts.color - the text colour.
+         * @param {object|null} parts.heading - a heading element, or null.
+         * @param {string} parts.text - the body text.
+         * @param {string} parts.dismissLabel - the close button's label.
+         * @param {() => void} parts.onDismiss - closes this panel's channel.
+         * @returns {object} the React element.
          */
-        function NotesPanel(props) {
-          const { sessionId, useInput } = props
-          const entry = useEntry(sessionId)
-          const draft = useInput === undefined ? '' : (useInput((s) => (s === undefined ? '' : s.draft)) ?? '')
-          // Each entry dismisses exactly when it stops being relevant. Notes
-          // describe the optimized prompt, so they go once the draft is cleared
-          // (the user sent the message or deleted the text). The empty-draft
-          // error asks for input, so it goes once text exists.
-          React.useEffect(() => {
-            if (entry === null) return
-            if (entry.kind === 'notes' && draft.trim().length === 0) {
-              setNotes(sessionId, '')
-            } else if (entry.kind === 'error' && draft.trim().length > 0) {
-              setError(sessionId, '')
-            }
-          }, [entry, draft, sessionId])
-          if (entry === null) return null
-          const isError = entry.kind === 'error'
-          return h(
+        const DockPanelShell = ({ role, color, heading, text, dismissLabel, onDismiss }) =>
+          h(
             'div',
             {
-              // An error is announced assertively; notes are a polite update.
-              role: isError ? 'alert' : 'status',
+              role,
               style: {
                 width: '100%',
-                // The dock is a full-width strip above the composer card. The
-                // panel is capped to the card's own max-width (the same CSS
-                // variable the host's .Q7WfXG_card uses) and centered, so it
-                // never reads wider than the input box beneath it.
                 maxWidth: 'var(--dsh-composer-card-max-width)',
                 marginInline: 'auto',
                 boxSizing: 'border-box',
@@ -282,44 +266,26 @@ window.__ModuleLoader__.load({
                 border: '1px solid var(--dsw-alias-border-l1)',
                 fontSize: '13px',
                 lineHeight: '1.5',
-                color: isError
-                  ? 'var(--dsw-alias-state-error-primary)'
-                  : 'var(--dsw-alias-label-primary)',
+                color,
               },
             },
             h(
               'div',
               { style: { flex: '1', minWidth: 0 } },
-              // Notes carry a heading; the error line is short enough to read
-              // as itself and needs no label above it.
-              isError
-                ? null
-                : h(
-                    'div',
-                    {
-                      style: {
-                        fontWeight: 600,
-                        fontSize: '12px',
-                        color: 'var(--dsw-alias-label-secondary)',
-                        marginBottom: '2px',
-                      },
-                    },
-                    t('notes.heading'),
-                  ),
+              heading,
               h(
                 'div',
                 { style: { whiteSpace: 'pre-wrap', wordBreak: 'break-word' } },
-                entry.text,
+                text,
               ),
             ),
             h(
               'button',
               {
                 type: 'button',
-                // Empty text removes the entry whatever its kind.
-                onClick: () => setNotes(sessionId, ''),
-                'aria-label': t('notes.dismiss'),
-                title: t('notes.dismiss'),
+                onClick: onDismiss,
+                'aria-label': dismissLabel,
+                title: dismissLabel,
                 style: {
                   flex: 'none',
                   boxSizing: 'border-box',
@@ -342,6 +308,75 @@ window.__ModuleLoader__.load({
               '×',
             ),
           )
+
+        /**
+         * The notes panel: one of this plugin's two dock entries. It shows the
+         * optimization notes, and it appears only while notes exist for the
+         * session. Notes describe the optimized prompt, so they dismiss when
+         * the draft is cleared (the user sent the message or deleted the text).
+         * @param {object} props - the slot's standard props.
+         * @returns {object|null} the React element, or null when there are no notes.
+         */
+        function NotesPanel(props) {
+          const { sessionId, useInput } = props
+          const notes = notesChannel.use(sessionId)
+          const draft = useInput === undefined ? '' : (useInput((s) => (s === undefined ? '' : s.draft)) ?? '')
+          React.useEffect(() => {
+            if (notes.length > 0 && draft.trim().length === 0) {
+              notesChannel.set(sessionId, '')
+            }
+          }, [notes, draft, sessionId])
+          if (notes.length === 0) return null
+          return h(DockPanelShell, {
+            role: 'status',
+            color: 'var(--dsw-alias-label-primary)',
+            heading: h(
+              'div',
+              {
+                style: {
+                  fontWeight: 600,
+                  fontSize: '12px',
+                  color: 'var(--dsw-alias-label-secondary)',
+                  marginBottom: '2px',
+                },
+              },
+              t('notes.heading'),
+            ),
+            text: notes,
+            dismissLabel: t('notes.dismiss'),
+            onDismiss: () => notesChannel.set(sessionId, ''),
+          })
+        }
+
+        /**
+         * The error panel: this plugin's second dock entry. It shows why an
+         * optimization could not even start — the empty-draft notice today.
+         * The notice asks for input, so it dismisses once the draft has text.
+         * It is a separate entry from the notes panel, so both can be up at
+         * once without one displacing the other.
+         * @param {object} props - the slot's standard props.
+         * @returns {object|null} the React element, or null when there is no error.
+         */
+        function ErrorPanel(props) {
+          const { sessionId, useInput } = props
+          const message = errorChannel.use(sessionId)
+          const draft = useInput === undefined ? '' : (useInput((s) => (s === undefined ? '' : s.draft)) ?? '')
+          React.useEffect(() => {
+            if (message.length > 0 && draft.trim().length > 0) {
+              errorChannel.set(sessionId, '')
+            }
+          }, [message, draft, sessionId])
+          if (message.length === 0) return null
+          // The error line is short enough to read as itself and needs no
+          // heading above it; it is announced assertively.
+          return h(DockPanelShell, {
+            role: 'alert',
+            color: 'var(--dsw-alias-state-error-primary)',
+            heading: null,
+            text: message,
+            dismissLabel: t('notes.dismiss'),
+            onDismiss: () => errorChannel.set(sessionId, ''),
+          })
         }
 
         /**
@@ -363,10 +398,10 @@ window.__ModuleLoader__.load({
             if (busy) return
             const text = (draft ?? '').trim()
             if (text.length === 0) {
-              // The empty-draft notice belongs in the panel above the composer
-              // with this plugin's other messages, not squeezed into the
-              // toolbar beside the button.
-              setError(sessionId, t('button.empty'))
+              // The empty-draft notice goes to this plugin's error panel above
+              // the composer — its own dock entry, independent of the notes
+              // panel, so both can be up at once.
+              errorChannel.set(sessionId, t('button.empty'))
               return
             }
             if (sessionId === undefined) {
@@ -402,7 +437,7 @@ window.__ModuleLoader__.load({
                 inputActions.setDraft(optimized)
                 inputActions.persistDraft()
               }
-              setNotes(sessionId, notes)
+              notesChannel.set(sessionId, notes)
               setState({ phase: 'idle', message: '' })
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error)
@@ -493,16 +528,25 @@ window.__ModuleLoader__.load({
           ),
         )
 
-        // The notes panel takes the dock seat the host renders as a full-width
-        // strip above the composer card. It is a list seat (additive, no
-        // shadowing), so the registration carries an id and order; it renders
-        // only while the optimization produced notes for the session.
-        ctx.slots.inject('conversation.input.dock', () =>
-          ctx.slots.register(
+        // The two panels take dock entries the host renders as a full-width
+        // strip above the composer card. The dock is a list seat (additive, no
+        // shadowing), so each registration carries an id and order. Notes come
+        // first, the error notice under them; each panel renders only while its
+        // own channel holds text, so zero, one, or both can be up at a time.
+        ctx.slots.inject('conversation.input.dock', () => {
+          const disposeNotes = ctx.slots.register(
             { name: 'conversation.input.dock', id: 'prompt-optimizer-notes', order: 0, label: t('notes.heading') },
             NotesPanel,
-          ),
-        )
+          )
+          const disposeError = ctx.slots.register(
+            { name: 'conversation.input.dock', id: 'prompt-optimizer-error', order: 1, label: t('button.failed') },
+            ErrorPanel,
+          )
+          return () => {
+            disposeNotes()
+            disposeError()
+          }
+        })
       },
     }
   },

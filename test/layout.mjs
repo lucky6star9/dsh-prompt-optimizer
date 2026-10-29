@@ -96,17 +96,34 @@ check(
   true,
 )
 check(
-  'the panel dismisses when the draft is empty',
-  clientSrc.includes('draft.trim().length === 0') && clientSrc.includes('setNotes(sessionId'),
+  'the notes panel dismisses when the draft is empty',
+  clientSrc.includes('draft.trim().length === 0') && clientSrc.includes("notesChannel.set(sessionId, ''"),
   true,
 )
 
-// The empty-draft notice now surfaces in the panel above the composer rather
-// than as a red line squeezed into the toolbar beside the button. The panel's
-// entries are one of two kinds, and each clears when it stops being relevant.
+// The dock holds two independent entries — the notes panel and the error
+// panel — each backed by its own channel, so one being up tells you nothing
+// about the other and both can show at once.
+check('registers the error panel as its own dock entry', clientSrc.includes("id: 'prompt-optimizer-error'"), true)
+check('defines the ErrorPanel component', clientSrc.includes('function ErrorPanel('), true)
 check(
-  'the empty-draft notice is published to the panel',
-  clientSrc.includes("setError(sessionId, t('button.empty'))"),
+  'the error entry sorts after the notes entry',
+  /id: 'prompt-optimizer-notes', order: 0/.test(clientSrc) &&
+    /id: 'prompt-optimizer-error', order: 1/.test(clientSrc),
+  true,
+)
+check(
+  'the two panels share one shell so their geometry matches',
+  clientSrc.includes('DockPanelShell'),
+  true,
+)
+
+// The empty-draft notice surfaces in the plugin's error panel above the
+// composer rather than as a red line squeezed into the toolbar beside the
+// button, and it clears once text exists.
+check(
+  'the empty-draft notice is published to the error channel',
+  clientSrc.includes("errorChannel.set(sessionId, t('button.empty'))"),
   true,
 )
 check(
@@ -115,18 +132,18 @@ check(
   false,
 )
 check(
-  'an error entry clears once the draft has text',
-  clientSrc.includes("entry.kind === 'error' && draft.trim().length > 0"),
+  'the error panel clears once the draft has text',
+  /message\.length > 0 && draft\.trim\(\)\.length > 0[\s\S]*?errorChannel\.set\(sessionId, ''\)/.test(clientSrc),
   true,
 )
 check(
-  'the panel renders errors in the error colour',
-  /const isError = entry\.kind === 'error'[\s\S]*?--dsw-alias-state-error-primary/.test(clientSrc),
+  'the error panel renders in the error colour',
+  /function ErrorPanel[\s\S]*?--dsw-alias-state-error-primary/.test(clientSrc),
   true,
 )
 check(
-  'the panel announces errors assertively',
-  clientSrc.includes("role: isError ? 'alert' : 'status'"),
+  'the error panel is announced assertively',
+  /function ErrorPanel[\s\S]*?role: 'alert'/.test(clientSrc),
   true,
 )
 

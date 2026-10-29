@@ -177,7 +177,7 @@ let mounted
 try {
   mounted = buildAndMount('idle')
   check('the client module mounts without throwing', true, true)
-  check('apply registers two components', mounted.registered.length, 2)
+  check('apply registers three components', mounted.registered.length, 3)
   check('apply injects two slots', mounted.injected.length, 2)
 } catch (error) {
   check('the client module mounts without throwing', `threw: ${error.message}`, true)
@@ -185,11 +185,15 @@ try {
 
 const activityOpts = mounted?.registered?.[0]?.options
 check('the first slot is the activity seat', activityOpts?.name, 'conversation.input.activity')
-const dockOpts = mounted?.registered?.[1]?.options
-check('the second slot is the dock seat', dockOpts?.name, 'conversation.input.dock')
-check('the dock entry carries an id', dockOpts?.id, 'prompt-optimizer-notes')
-check('the dock entry carries an order', typeof dockOpts?.order, 'number')
-check('the dock entry carries a label', typeof dockOpts?.label, 'string')
+const notesOpts = mounted?.registered?.[1]?.options
+check('the second slot is the dock seat', notesOpts?.name, 'conversation.input.dock')
+check('the notes dock entry carries its id', notesOpts?.id, 'prompt-optimizer-notes')
+check('the notes dock entry carries an order', typeof notesOpts?.order, 'number')
+check('the notes dock entry carries a label', typeof notesOpts?.label, 'string')
+const errorOpts = mounted?.registered?.[2]?.options
+check('the third entry is the error panel', errorOpts?.name, 'conversation.input.dock')
+check('the error dock entry carries its own id', errorOpts?.id, 'prompt-optimizer-error')
+check('the error dock entry sorts after the notes entry', errorOpts?.order > notesOpts?.order, true)
 check('the injected slots match', mounted?.injected?.join(','), 'conversation.input.activity,conversation.input.dock')
 
 // 2. Rendering must not throw, in both states. This is the check that would have
@@ -388,9 +392,9 @@ try {
   const buttonEl = (buttonTree?.children ?? []).find((c) => c?.type === 'button')
   await buttonEl?.props?.onClick?.()
 
-  const dockComp = emptyDraft.registered[1].component
+  const dockComp = emptyDraft.registered[2].component
   const panel = dockComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: '' }) })
-  check('an empty-draft click surfaces the notice in the panel', panel !== null, true)
+  check('an empty-draft click surfaces the notice in the error panel', panel !== null, true)
 
   elements.length = 0
   dockComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: '' }) })
@@ -416,7 +420,58 @@ try {
   const cleared = dockComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'typed' }) })
   check('the notice clears once the draft has text', cleared, null)
 } catch (error) {
-  check('an empty-draft click surfaces the notice in the panel', `threw: ${error.message}`, true)
+  check('an empty-draft click surfaces the notice in the error panel', `threw: ${error.message}`, true)
+}
+
+// 10. The two dock panels read independent channels. The notes panel's
+//     auto-dismiss rule (draft empty -> notes go) means that by the time an
+//     empty-draft error can appear, the notes have already cleared — so in
+//     normal use at most one panel is up. What independence guarantees is that
+//     neither channel can overwrite the other: publishing an error leaves
+//     whatever notes exist alone (and vice versa), and each panel renders and
+//     dismisses strictly from its own channel.
+try {
+  const split = buildAndMount('idle', { notes: 'kept notes' })
+  const notesComp = split.registered[1].component
+  const errorComp = split.registered[2].component
+
+  // Publish notes through the success path (draft non-empty).
+  const seedProps = {
+    sessionId: 'session-stub',
+    useInput: (sel) => sel({ draft: 'text' }),
+    inputActions: { setDraft: () => {}, persistDraft: () => {} },
+  }
+  const seedTree = split.registered[0].component(seedProps)
+  await (seedTree?.children ?? []).find((c) => c?.type === 'button')?.props?.onClick?.()
+  check('notes are up after a successful optimization', notesComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'text' }) }) !== null, true)
+  check('the error panel stays down while notes are up', errorComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'text' }) }), null)
+
+  // Publish the empty-draft error in the same build (draft now empty). The
+  // notes auto-dismiss fires on the empty draft by design; the error channel
+  // is what remains, and it rendered without touching the notes channel's
+  // internals along the way.
+  const emptyProps = {
+    sessionId: 'session-stub',
+    useInput: (sel) => sel({ draft: '' }),
+    inputActions: { setDraft: () => {}, persistDraft: () => {} },
+  }
+  const errTree = split.registered[0].component(emptyProps)
+  await (errTree?.children ?? []).find((c) => c?.type === 'button')?.props?.onClick?.()
+  check('the error panel is up after the empty-draft click', errorComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: '' }) }) !== null, true)
+  // The stub runs useEffect synchronously inside the render, so the auto-dismiss
+  // fires during a first pass and is read back on the second — the same two-
+  // render rhythm the notes auto-dismiss test above uses.
+  notesComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: '' }) })
+  check('the notes panel cleared on the empty draft, not on the error', notesComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: '' }) }), null)
+
+  // The error clears once text exists; notes can be published again after.
+  errorComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'typed' }) })
+  check('the error panel clears once the draft has text', errorComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'typed' }) }), null)
+  const again = split.registered[0].component(seedProps)
+  await (again?.children ?? []).find((c) => c?.type === 'button')?.props?.onClick?.()
+  check('notes publish again after the error cleared', notesComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'text' }) }) !== null, true)
+} catch (error) {
+  check('notes are up after a successful optimization', `threw: ${error.message}`, true)
 }
 
 /** Whether this file is the process entry point, rather than an import. */
