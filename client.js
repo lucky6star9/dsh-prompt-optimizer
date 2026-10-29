@@ -202,12 +202,13 @@ window.__ModuleLoader__.load({
             const fns = listeners.get(sessionId)
             if (fns !== undefined) for (const fn of fns) fn()
           }
-          const set = (sessionId, text) => {
-            const value = text ?? ''
-            if (value.length === 0) store.delete(sessionId)
+          const set = (sessionId, value) => {
+            if (value === null || value === undefined) store.delete(sessionId)
             else store.set(sessionId, value)
             notify(sessionId)
           }
+          const read = (sessionId) =>
+            sessionId === undefined ? undefined : store.get(sessionId)
           const use = (sessionId) => {
             const [, force] = React.useState(0)
             React.useEffect(() => {
@@ -221,16 +222,38 @@ window.__ModuleLoader__.load({
               fns.add(fn)
               return () => { fns.delete(fn) }
             }, [sessionId])
-            return sessionId === undefined ? '' : (store.get(sessionId) ?? '')
+            return read(sessionId)
           }
-          return { store, get: (id) => store.get(id) ?? '', set, use }
+          return { store, read, set, use }
         }
 
-        /** Optimization notes, published when an optimization succeeds. */
-        const notesChannel = makeChannel('notes')
+        /**
+         * Optimization notes, published when an optimization succeeds. The
+         * value is the plain notes text; empty text means no entry.
+         */
+        const notesChannel = (() => {
+          const channel = makeChannel('notes')
+          return {
+            set: (sessionId, text) => channel.set(sessionId, (text ?? '') === '' ? undefined : text),
+            use: (sessionId) => channel.use(sessionId) ?? '',
+          }
+        })()
 
-        /** Error notices, published when an optimization cannot even start. */
-        const errorChannel = makeChannel('error')
+        /**
+         * Error notices, published when an optimization cannot start or fails
+         * partway. The value carries the message and whether it should clear
+         * once the user types: the empty-draft notice asks for input, so it
+         * does; a failure during a run describes the text still sitting in the
+         * composer, so it stays until dismissed or replaced.
+         */
+        const errorChannel = (() => {
+          const channel = makeChannel('error')
+          return {
+            set: (sessionId, text, clearOnInput = false) =>
+              channel.set(sessionId, (text ?? '') === '' ? undefined : { text, clearOnInput }),
+            use: (sessionId) => channel.use(sessionId) ?? null,
+          }
+        })()
 
         /**
          * The shell the two dock panels share: a full-width strip above the
@@ -350,30 +373,33 @@ window.__ModuleLoader__.load({
 
         /**
          * The error panel: this plugin's second dock entry. It shows why an
-         * optimization could not even start — the empty-draft notice today.
-         * The notice asks for input, so it dismisses once the draft has text.
-         * It is a separate entry from the notes panel, so both can be up at
-         * once without one displacing the other.
+         * optimization could not start or failed partway. Only a notice that
+         * asks for input — the empty-draft one — clears when the user types;
+         * a failure during a run describes the text still sitting in the
+         * composer, so it stays until dismissed or replaced by the next
+         * attempt. It is a separate entry from the notes panel, so neither
+         * displaces the other.
          * @param {object} props - the slot's standard props.
          * @returns {object|null} the React element, or null when there is no error.
          */
         function ErrorPanel(props) {
           const { sessionId, useInput } = props
-          const message = errorChannel.use(sessionId)
+          const entry = errorChannel.use(sessionId)
           const draft = useInput === undefined ? '' : (useInput((s) => (s === undefined ? '' : s.draft)) ?? '')
           React.useEffect(() => {
-            if (message.length > 0 && draft.trim().length > 0) {
+            if (entry === null) return
+            if (entry.clearOnInput && draft.trim().length > 0) {
               errorChannel.set(sessionId, '')
             }
-          }, [message, draft, sessionId])
-          if (message.length === 0) return null
+          }, [entry, draft, sessionId])
+          if (entry === null) return null
           // The error line is short enough to read as itself and needs no
           // heading above it; it is announced assertively.
           return h(DockPanelShell, {
             role: 'alert',
             color: 'var(--dsw-alias-state-error-primary)',
             heading: null,
-            text: message,
+            text: entry.text,
             dismissLabel: t('notes.dismiss'),
             onDismiss: () => errorChannel.set(sessionId, ''),
           })
@@ -401,11 +427,11 @@ window.__ModuleLoader__.load({
               // The empty-draft notice goes to this plugin's error panel above
               // the composer — its own dock entry, independent of the notes
               // panel, so both can be up at once.
-              errorChannel.set(sessionId, t('button.empty'))
+              errorChannel.set(sessionId, t('button.empty'), true)
               return
             }
             if (sessionId === undefined) {
-              setState({ phase: 'error', message: t('button.failed') })
+              errorChannel.set(sessionId, t('button.failed'))
               return
             }
             setState({ phase: 'busy', message: '' })
@@ -441,7 +467,11 @@ window.__ModuleLoader__.load({
               setState({ phase: 'idle', message: '' })
             } catch (error) {
               const message = error instanceof Error ? error.message : String(error)
-              setState({ phase: 'error', message })
+              // Failures during an optimization run surface in the error panel
+              // too. The draft still holds the text that failed, so the message
+              // must stay until dismissed or the next attempt replaces it.
+              errorChannel.set(sessionId, message)
+              setState({ phase: 'idle', message: '' })
             }
           }, [busy, draft, sessionId, inputActions, t])
 
@@ -492,24 +522,6 @@ window.__ModuleLoader__.load({
               },
               busy ? h(OptimizeSpinner) : h(OptimizeIcon),
             ),
-            state.phase === 'error'
-              ? h(
-                  'span',
-                  {
-                    style: {
-                      fontSize: '12px',
-                      color: 'var(--dsw-alias-state-error-primary)',
-                      maxWidth: '28ch',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    },
-                    title: state.message,
-                  },
-                  `${t('button.failed')}: ${state.message}`,
-                )
-              : null,
-
           )
         }
 

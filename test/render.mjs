@@ -93,7 +93,7 @@ const makeLocaleStub = (options = {}) => {
  * @returns {object} what apply registered, plus the locale stub and cleanups.
  */
 const buildAndMount = (phase, options = {}) => {
-  const { withLocale = true, localeBroken = false, notes = null } = options
+  const { withLocale = true, localeBroken = false, notes = null, failWith = null } = options
   elements.length = 0
   const registrations = []
   globalThis.window = {
@@ -124,15 +124,18 @@ const buildAndMount = (phase, options = {}) => {
   // flow without a live Host.
   const SEPARATOR = '\n\n--- notes ---\n'
   const commandsStub = {
-    execute: async (sessionId, line) => ({
-      ok: true,
-      value: {
-        result: {
-          kind: 'success',
-          text: notes === null ? 'optimized prompt' : `optimized prompt${SEPARATOR}${notes}`,
+    execute: async (sessionId, line) => {
+      if (failWith !== null) throw new Error(failWith)
+      return {
+        ok: true,
+        value: {
+          result: {
+            kind: 'success',
+            text: notes === null ? 'optimized prompt' : `optimized prompt${SEPARATOR}${notes}`,
+          },
         },
-      },
-    }),
+      }
+    },
   }
 
   plugin.apply({
@@ -472,6 +475,52 @@ try {
   check('notes publish again after the error cleared', notesComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'text' }) }) !== null, true)
 } catch (error) {
   check('notes are up after a successful optimization', `threw: ${error.message}`, true)
+}
+
+// 11. A failure during the run publishes to the error panel too, and unlike
+//     the empty-draft notice it does NOT clear when the draft has text: the
+//     composer still holds the text that failed, so the message must stay
+//     until dismissed or the next attempt replaces it.
+try {
+  const failed = buildAndMount('idle', { failWith: 'LLM exploded' })
+  const failProps = {
+    sessionId: 'session-stub',
+    useInput: (sel) => sel({ draft: 'text' }),
+    inputActions: { setDraft: () => {}, persistDraft: () => {} },
+  }
+  const failTree = failed.registered[0].component(failProps)
+  await (failTree?.children ?? []).find((c) => c?.type === 'button')?.props?.onClick?.()
+
+  const errorComp = failed.registered[2].component
+  const up = errorComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'text' }) })
+  check('a failure during the run surfaces in the error panel', up !== null, true)
+
+  elements.length = 0
+  errorComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'text' }) })
+  const text = elements
+    .flatMap((el) => el?.children ?? [])
+    .filter((c) => typeof c === 'string')
+    .join(' ')
+  check('the failure message is the thrown error text', text.includes('LLM exploded'), true)
+
+  // The draft has text and the error stays — that is the point of this kind.
+  errorComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'text' }) })
+  const stillUp = errorComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'text' }) })
+  check('the failure error persists while the draft has text', stillUp !== null, true)
+
+  // A fresh successful run replaces it with notes.
+  const recover = buildAndMount('idle', { notes: 'recovered' })
+  const okProps = {
+    sessionId: 'session-stub',
+    useInput: (sel) => sel({ draft: 'text' }),
+    inputActions: { setDraft: () => {}, persistDraft: () => {} },
+  }
+  const okTree = recover.registered[0].component(okProps)
+  await (okTree?.children ?? []).find((c) => c?.type === 'button')?.props?.onClick?.()
+  check('a successful run clears the error panel', recover.registered[2].component({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'text' }) }), null)
+  check('and publishes its notes instead', recover.registered[1].component({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'text' }) }) !== null, true)
+} catch (error) {
+  check('a failure during the run surfaces in the error panel', `threw: ${error.message}`, true)
 }
 
 /** Whether this file is the process entry point, rather than an import. */

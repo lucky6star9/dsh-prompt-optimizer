@@ -123,7 +123,7 @@ check(
 // button, and it clears once text exists.
 check(
   'the empty-draft notice is published to the error channel',
-  clientSrc.includes("errorChannel.set(sessionId, t('button.empty'))"),
+  clientSrc.includes("errorChannel.set(sessionId, t('button.empty'), true)"),
   true,
 )
 check(
@@ -132,9 +132,19 @@ check(
   false,
 )
 check(
-  'the error panel clears once the draft has text',
-  /message\.length > 0 && draft\.trim\(\)\.length > 0[\s\S]*?errorChannel\.set\(sessionId, ''\)/.test(clientSrc),
+  'only the input-seeking notice clears when the user types',
+  clientSrc.includes('entry.clearOnInput && draft.trim().length > 0'),
   true,
+)
+check(
+  'a failure during a run is published to the error panel too',
+  /catch \(error\) \{[\s\S]*?errorChannel\.set\(sessionId, message\)/.test(clientSrc),
+  true,
+)
+check(
+  'no error line is rendered beside the button any more',
+  /state\.phase === 'error'[\s\S]*?h\(\s*'span'/.test(clientSrc),
+  false,
 )
 check(
   'the error panel renders in the error colour',
