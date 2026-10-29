@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: '@luckystar6/prompt-optimizer',
+  id: '@local/prompt-optimizer',
   factory(require) {
     const React = require('react')
     const h = React.createElement

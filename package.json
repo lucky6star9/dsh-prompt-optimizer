@@ -1,11 +1,15 @@
 {
-  "name": "@luckystar6/prompt-optimizer",
+  "name": "@local/prompt-optimizer",
   "version": "1.0.0",
-  "private": false,
+  "private": true,
   "type": "module",
   "description": "Optimizes a prompt against the current project: a composer icon button and an agent tool rewrite a draft using the workspace's stack, structure, and conventions.",
   "license": "MIT",
   "author": "luckystar6",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lucky9star6/dsh-prompt-optimizer.git"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

@@ -512,7 +512,7 @@ export function apply(ctx) {
 
   if (commands !== undefined) {
     const dispose = commands.register({
-      definitionId: CommandDefinitionId('@luckystar6/prompt-optimizer'),
+      definitionId: CommandDefinitionId('@local/prompt-optimizer'),
       name: 'optimize',
       description: 'Optimize the current prompt against this project.',
       input: { hint: '<prompt text>' },
