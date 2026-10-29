@@ -101,6 +101,35 @@ check(
   true,
 )
 
+// The empty-draft notice now surfaces in the panel above the composer rather
+// than as a red line squeezed into the toolbar beside the button. The panel's
+// entries are one of two kinds, and each clears when it stops being relevant.
+check(
+  'the empty-draft notice is published to the panel',
+  clientSrc.includes("setError(sessionId, t('button.empty'))"),
+  true,
+)
+check(
+  'the empty-draft notice no longer sets the button error phase',
+  clientSrc.includes("message: t('button.empty')"),
+  false,
+)
+check(
+  'an error entry clears once the draft has text',
+  clientSrc.includes("entry.kind === 'error' && draft.trim().length > 0"),
+  true,
+)
+check(
+  'the panel renders errors in the error colour',
+  /const isError = entry\.kind === 'error'[\s\S]*?--dsw-alias-state-error-primary/.test(clientSrc),
+  true,
+)
+check(
+  'the panel announces errors assertively',
+  clientSrc.includes("role: isError ? 'alert' : 'status'"),
+  true,
+)
+
 // 5. The control reads the draft through useInput and writes through
 //    inputActions, which are the props the composer tool row provides.
 check('reads the draft with useInput', clientSrc.includes('useInput('), true)

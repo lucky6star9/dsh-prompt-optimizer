@@ -186,68 +186,83 @@ window.__ModuleLoader__.load({
         }
 
         /**
-         * Per-session notes store. The button (in the activity seat) writes the
-         * optimization notes here; the panel above the composer (in the dock
-         * seat) reads them. Both seats are session-scoped, so the notes are
-         * keyed by sessionId to avoid leaking across conversations.
+         * Per-session panel entries. The button (in the activity seat) writes
+         * here; the panel above the composer (in the dock seat) reads. Entries
+         * are keyed by sessionId to avoid leaking across conversations, and each
+         * is one of two kinds: optimization notes, or an error message such as
+         * the empty-draft notice.
          */
-        const notesBySession = new Map()
-        const notesListeners = new Map()
+        const entriesBySession = new Map()
+        const entryListeners = new Map()
 
-        /** Publish notes for a session, notifying every mounted panel. */
-        const setNotes = (sessionId, text) => {
+        /** Publish an entry for a session, notifying every mounted panel. */
+        const setEntry = (sessionId, kind, text) => {
           const value = text ?? ''
-          if (value.length === 0) notesBySession.delete(sessionId)
-          else notesBySession.set(sessionId, value)
-          const listeners = notesListeners.get(sessionId)
+          if (value.length === 0) entriesBySession.delete(sessionId)
+          else entriesBySession.set(sessionId, { kind, text: value })
+          const listeners = entryListeners.get(sessionId)
           if (listeners !== undefined) for (const fn of listeners) fn()
         }
 
+        /** Publish optimization notes for a session. */
+        const setNotes = (sessionId, text) => setEntry(sessionId, 'notes', text)
+
+        /** Publish an error message for a session. */
+        const setError = (sessionId, text) => setEntry(sessionId, 'error', text)
+
         /**
-         * Subscribe to a session's notes from a component. Returns the current
-         * text and re-renders when it changes.
+         * Subscribe to a session's entry from a component. Returns the current
+         * entry and re-renders when it changes.
          * @param {string|undefined} sessionId - the active session.
-         * @returns {string} the notes text (empty when none).
+         * @returns {{kind: string, text: string}|null} the entry, or null when none.
          */
-        const useNotes = (sessionId) => {
+        const useEntry = (sessionId) => {
           const [, force] = React.useState(0)
           React.useEffect(() => {
             if (sessionId === undefined) return () => {}
-            let listeners = notesListeners.get(sessionId)
+            let listeners = entryListeners.get(sessionId)
             if (listeners === undefined) {
               listeners = new Set()
-              notesListeners.set(sessionId, listeners)
+              entryListeners.set(sessionId, listeners)
             }
             const fn = () => force((x) => x + 1)
             listeners.add(fn)
             return () => { listeners.delete(fn) }
           }, [sessionId])
-          return sessionId === undefined ? '' : (notesBySession.get(sessionId) ?? '')
+          return sessionId === undefined ? null : (entriesBySession.get(sessionId) ?? null)
         }
 
         /**
          * A full-width panel rendered above the composer (in the dock seat) that
-         * shows the optimization notes. It appears only while notes exist for
+         * shows this plugin's messages: optimization notes, or an error such as
+         * the empty-draft notice. It appears only while an entry exists for
          * the session and dismisses on its close button.
          * @param {object} props - the slot's standard props.
-         * @returns {object|null} the React element, or null when there are no notes.
+         * @returns {object|null} the React element, or null when there is no entry.
          */
         function NotesPanel(props) {
           const { sessionId, useInput } = props
-          const notes = useNotes(sessionId)
+          const entry = useEntry(sessionId)
           const draft = useInput === undefined ? '' : (useInput((s) => (s === undefined ? '' : s.draft)) ?? '')
-          // When the composer draft is cleared after optimization (the user
-          // sent the message or deleted the text), the notes above it no
-          // longer apply: auto-dismiss them.
+          // Each entry dismisses exactly when it stops being relevant. Notes
+          // describe the optimized prompt, so they go once the draft is cleared
+          // (the user sent the message or deleted the text). The empty-draft
+          // error asks for input, so it goes once text exists.
           React.useEffect(() => {
-            if (notes.length > 0 && draft.trim().length === 0) {
+            if (entry === null) return
+            if (entry.kind === 'notes' && draft.trim().length === 0) {
               setNotes(sessionId, '')
+            } else if (entry.kind === 'error' && draft.trim().length > 0) {
+              setError(sessionId, '')
             }
-          }, [notes, draft, sessionId])
-          if (notes.length === 0) return null
+          }, [entry, draft, sessionId])
+          if (entry === null) return null
+          const isError = entry.kind === 'error'
           return h(
             'div',
             {
+              // An error is announced assertively; notes are a polite update.
+              role: isError ? 'alert' : 'status',
               style: {
                 width: '100%',
                 // The dock is a full-width strip above the composer card. The
@@ -267,34 +282,41 @@ window.__ModuleLoader__.load({
                 border: '1px solid var(--dsw-alias-border-l1)',
                 fontSize: '13px',
                 lineHeight: '1.5',
-                color: 'var(--dsw-alias-label-primary)',
+                color: isError
+                  ? 'var(--dsw-alias-state-error-primary)'
+                  : 'var(--dsw-alias-label-primary)',
               },
             },
             h(
               'div',
               { style: { flex: '1', minWidth: 0 } },
-              h(
-                'div',
-                {
-                  style: {
-                    fontWeight: 600,
-                    fontSize: '12px',
-                    color: 'var(--dsw-alias-label-secondary)',
-                    marginBottom: '2px',
-                  },
-                },
-                t('notes.heading'),
-              ),
+              // Notes carry a heading; the error line is short enough to read
+              // as itself and needs no label above it.
+              isError
+                ? null
+                : h(
+                    'div',
+                    {
+                      style: {
+                        fontWeight: 600,
+                        fontSize: '12px',
+                        color: 'var(--dsw-alias-label-secondary)',
+                        marginBottom: '2px',
+                      },
+                    },
+                    t('notes.heading'),
+                  ),
               h(
                 'div',
                 { style: { whiteSpace: 'pre-wrap', wordBreak: 'break-word' } },
-                notes,
+                entry.text,
               ),
             ),
             h(
               'button',
               {
                 type: 'button',
+                // Empty text removes the entry whatever its kind.
                 onClick: () => setNotes(sessionId, ''),
                 'aria-label': t('notes.dismiss'),
                 title: t('notes.dismiss'),
@@ -341,7 +363,10 @@ window.__ModuleLoader__.load({
             if (busy) return
             const text = (draft ?? '').trim()
             if (text.length === 0) {
-              setState({ phase: 'error', message: t('button.empty') })
+              // The empty-draft notice belongs in the panel above the composer
+              // with this plugin's other messages, not squeezed into the
+              // toolbar beside the button.
+              setError(sessionId, t('button.empty'))
               return
             }
             if (sessionId === undefined) {

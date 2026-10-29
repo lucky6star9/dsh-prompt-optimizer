@@ -374,6 +374,51 @@ try {
   check('the panel auto-dismisses when the draft empties', `threw: ${error.message}`, null)
 }
 
+// 9. Clicking the button with an empty draft surfaces the notice in the panel
+//    above the composer — not as a red line beside the button — and the notice
+//    clears once the draft has text again.
+const emptyDraft = buildAndMount('idle', { notes: 'irrelevant to this path' })
+try {
+  const emptyProps = {
+    sessionId: 'session-stub',
+    useInput: (sel) => sel({ draft: '' }),
+    inputActions: { setDraft: () => {}, persistDraft: () => {} },
+  }
+  const buttonTree = emptyDraft.registered[0].component(emptyProps)
+  const buttonEl = (buttonTree?.children ?? []).find((c) => c?.type === 'button')
+  await buttonEl?.props?.onClick?.()
+
+  const dockComp = emptyDraft.registered[1].component
+  const panel = dockComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: '' }) })
+  check('an empty-draft click surfaces the notice in the panel', panel !== null, true)
+
+  elements.length = 0
+  dockComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: '' }) })
+  const allText = elements
+    .flatMap((el) => el?.children ?? [])
+    .filter((c) => typeof c === 'string')
+    .join(' ')
+  check('the panel carries the empty-draft wording', allText.includes('Write a prompt first'), true)
+
+  check(
+    'the empty-draft notice is announced as an alert',
+    elements.some((el) => el?.props?.role === 'alert'),
+    true,
+  )
+  check(
+    'the notice panel still offers a close button',
+    elements.some((el) => el?.type === 'button' && typeof el?.props?.onClick === 'function'),
+    true,
+  )
+
+  // Once the user starts typing, the notice stops being relevant and clears.
+  dockComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'typed' }) })
+  const cleared = dockComp({ sessionId: 'session-stub', useInput: (sel) => sel({ draft: 'typed' }) })
+  check('the notice clears once the draft has text', cleared, null)
+} catch (error) {
+  check('an empty-draft click surfaces the notice in the panel', `threw: ${error.message}`, true)
+}
+
 /** Whether this file is the process entry point, rather than an import. */
 const isEntryPoint =
   process.argv[1] !== undefined &&
