@@ -49,45 +49,11 @@ The host scans the working directory for:
 
 ### Install
 
-#### Option A: Local symlink (development)
-
-Place the bundle directory in your workspace, then add a symlink in your DSH profile:
-
-```bash
-cd ~/.dsh/profiles/desktop
-npm link /path/to/prompt-optimizer-bundle
-```
-
-Add to your profile's `cordis.patch.yml`:
-
-```yaml
-- insert:
-    - id: prompt-optimizer
-      name: '@luckystar6/prompt-optimizer'
-      config: {}
-```
-
-#### Option B: npm install (once published)
-
 ```bash
 npm install @luckystar6/prompt-optimizer
 ```
 
 Then enable the bundle in your DSH profile via the Plugin Manager.
-
-### Tests
-
-```bash
-npm test
-```
-
-94 checks across three suites:
-
-| Suite | File | Checks |
-|-------|------|--------|
-| Reply parser | `test/parse-reply.test.mjs` | 8 |
-| Composer layout contract | `test/layout.mjs` | ~50 |
-| Client render smoke test | `test/render.mjs` | ~36 |
 
 ### File structure
 
@@ -150,45 +116,11 @@ prompt-optimizer-bundle/
 
 ### 安装
 
-#### 方式一：本地符号链接（开发用）
-
-把 bundle 目录放到工作目录，在 DSH profile 里建立符号链接：
-
-```bash
-cd ~/.dsh/profiles/desktop
-npm link /path/to/prompt-optimizer-bundle
-```
-
-在 profile 的 `cordis.patch.yml` 里添加：
-
-```yaml
-- insert:
-    - id: prompt-optimizer
-      name: '@luckystar6/prompt-optimizer'
-      config: {}
-```
-
-#### 方式二：npm 安装（发布后）
-
 ```bash
 npm install @luckystar6/prompt-optimizer
 ```
 
 然后在 DSH 的插件管理器里启用这个 bundle。
-
-### 测试
-
-```bash
-npm test
-```
-
-94 项检查，分三个测试套件：
-
-| 套件 | 文件 | 检查项 |
-|------|------|--------|
-| 返回解析器 | `test/parse-reply.test.mjs` | 8 |
-| 布局契约 | `test/layout.mjs` | ~50 |
-| 渲染冒烟测试 | `test/render.mjs` | ~36 |
 
 ### 目录结构
 
