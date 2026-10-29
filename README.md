@@ -1,89 +1,12 @@
 # Prompt Optimizer
 
-**A [DeepSeek Harness](https://github.com/deepseek-ai) (DSH) plugin that upgrades a prompt against the current project's stack, structure, and conventions.**
+**一个 [DeepSeek Harness](https://github.com/deepseek-ai)（DSH）插件：结合当前项目的技术栈、代码结构与约定，优化你的提示词。**
 
-Manually triggered via a composer icon button and an agent tool — it never auto-rewrites anything.
-
----
-
-[English](#english) | [中文](#中文)
+通过输入框图标按钮和 Agent 工具手动触发——绝不自动改写任何内容。
 
 ---
 
-## English
-
-### What it does
-
-Click the **light bulb** icon next to the send button. The plugin reads your workspace's file structure, key config files (`package.json`, `tsconfig.json`, etc.), and source code conventions, sends them together with your draft prompt to the LLM, and writes back an optimized version. The optimization notes appear in a panel above the input box.
-
-### Screenshots
-
-The optimize button in the composer toolbar:
-
-![The optimize button in the composer toolbar](assets/jt1.png)
-
-The notes panel above the input box after optimization:
-
-![The notes panel above the input box](assets/jt2.png)
-
-### Features
-
-| Feature | Description |
-|---------|-------------|
-| **Icon button** | Sits left of the send button in the composer toolbar — a yellow circular button with a light bulb icon |
-| **Agent tool** | `optimize_prompt` is available to any agent in the session |
-| **Slash command** | `/optimize <text>` for direct use |
-| **Notes panel** | Shows above the input box with optimization rationale; auto-dismisses when you clear the draft |
-| **Bilingual** | English and Chinese UI strings |
-| **Theme-aware** | Uses DSH's CSS variable tokens, works in both light and dark themes |
-
-### How it works
-
-No background service, no separate process. The plugin registers callbacks into DSH's Cordis runtime:
-
-| Half | File | Runs in | Registers |
-|------|------|---------|-----------|
-| Host | `index.js` | DSH backend | `optimize_prompt` tool + `/optimize` slash command |
-| Client | `client.js` | DSH web UI | composer button + notes panel + locale dictionaries |
-
-When you click the button, the client sends the draft to the host via DSH's existing remote-command channel. The host gathers project context (working directory + code structure + key file contents, capped at ~6000 chars), calls the LLM through `ctx.llm.stream()`, parses the reply, and returns the optimized prompt + notes.
-
-### Project context gathering
-
-The host scans the working directory for:
-
-- **Stack markers** — `package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, etc.
-- **Config docs** — `README.md`, `CONTRIBUTING.md`, `.editorconfig`, etc.
-- **Toolchain files** — `tsconfig.json`, `.eslintrc`, `prettier.config.js`, etc.
-- **Source files** — sampled up to a character budget, skipping `node_modules`, `.git`, `dist`, etc.
-
-### Install
-
-```bash
-npm install @luckystar6/prompt-optimizer
-```
-
-Then enable the bundle in your DSH profile via the Plugin Manager.
-
-### File structure
-
-```
-prompt-optimizer-bundle/
-├── index.js              # Host half: tool + slash command + project context + LLM call
-├── client.js             # Client half: icon button + notes panel + locale dicts
-├── cordis.patch.yml      # Cordis Loader patch declaration
-├── package.json          # npm package manifest
-├── icon.svg              # Plugin display icon (Plugin Manager)
-├── LICENSE               # MIT
-├── README.md             # This file
-├── locale/
-│   ├── en.json           # Plugin Manager display metadata (English)
-│   └── zh.json           # Plugin Manager display metadata (Chinese)
-└── test/
-    ├── parse-reply.test.mjs   # Parser tests + chained runner
-    ├── layout.mjs             # Layout contract checks
-    └── render.mjs             # Render smoke test (catches runtime crashes without a browser)
-```
+[中文](#中文) | [English](#english)
 
 ---
 
@@ -137,10 +60,10 @@ prompt-optimizer-bundle/
 ### 安装
 
 ```bash
-npm install @luckystar6/prompt-optimizer
+dsh plugin add https://github.com/lucky9star6/dsh-prompt-optimizer
 ```
 
-然后在 DSH 的插件管理器里启用这个 bundle。
+安装后在 DSH 的插件管理器里启用这个 bundle。
 
 ### 目录结构
 
@@ -149,10 +72,14 @@ prompt-optimizer-bundle/
 ├── index.js              # Host 半：工具 + 斜杠命令 + 项目上下文 + LLM 调用
 ├── client.js             # Client 半：图标按钮 + 说明面板 + 多语言字典
 ├── cordis.patch.yml      # Cordis Loader 补丁声明
-├── package.json          # npm 包清单
+├── package.json          # 包清单（含 dsh.bundle 声明）
 ├── icon.svg              # 插件显示图标（插件管理器用）
+├── screenshots.json      # 市场截图声明
 ├── LICENSE               # MIT 许可证
 ├── README.md             # 本文件
+├── assets/
+│   ├── jt1.png           # 截图：工具栏按钮
+│   └── jt2.png           # 截图：说明面板
 ├── locale/
 │   ├── en.json           # 插件管理器显示元数据（英文）
 │   └── zh.json           # 插件管理器显示元数据（中文）
@@ -160,6 +87,87 @@ prompt-optimizer-bundle/
     ├── parse-reply.test.mjs   # 解析器测试 + 链式运行器
     ├── layout.mjs             # 布局契约检查
     └── render.mjs             # 渲染冒烟测试（无需浏览器即可捕获运行时崩溃）
+```
+
+---
+
+## English
+
+### What it does
+
+Click the **light bulb** icon next to the send button. The plugin reads your workspace's file structure, key config files (`package.json`, `tsconfig.json`, etc.), and source code conventions, sends them together with your draft prompt to the LLM, and writes back an optimized version. The optimization notes appear in a panel above the input box.
+
+### Screenshots
+
+The optimize button in the composer toolbar:
+
+![The optimize button in the composer toolbar](assets/jt1.png)
+
+The notes panel above the input box after optimization:
+
+![The notes panel above the input box](assets/jt2.png)
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Icon button** | Sits left of the send button in the composer toolbar — a yellow circular button with a light bulb icon |
+| **Agent tool** | `optimize_prompt` is available to any agent in the session |
+| **Slash command** | `/optimize <text>` for direct use |
+| **Notes panel** | Shows above the input box with optimization rationale; auto-dismisses when you clear the draft |
+| **Bilingual** | English and Chinese UI strings |
+| **Theme-aware** | Uses DSH's CSS variable tokens, works in both light and dark themes |
+
+### How it works
+
+No background service, no separate process. The plugin registers callbacks into DSH's Cordis runtime:
+
+| Half | File | Runs in | Registers |
+|------|------|---------|-----------|
+| Host | `index.js` | DSH backend | `optimize_prompt` tool + `/optimize` slash command |
+| Client | `client.js` | DSH web UI | composer button + notes panel + locale dictionaries |
+
+When you click the button, the client sends the draft to the host via DSH's existing remote-command channel. The host gathers project context (working directory + code structure + key file contents, capped at ~6000 chars), calls the LLM through `ctx.llm.stream()`, parses the reply, and returns the optimized prompt + notes.
+
+### Project context gathering
+
+The host scans the working directory for:
+
+- **Stack markers** — `package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, etc.
+- **Config docs** — `README.md`, `CONTRIBUTING.md`, `.editorconfig`, etc.
+- **Toolchain files** — `tsconfig.json`, `.eslintrc`, `prettier.config.js`, etc.
+- **Source files** — sampled up to a character budget, skipping `node_modules`, `.git`, `dist`, etc.
+
+### Install
+
+```bash
+dsh plugin add https://github.com/lucky9star6/dsh-prompt-optimizer
+```
+
+Then enable the bundle in your DSH profile via the Plugin Manager.
+
+### File structure
+
+```
+prompt-optimizer-bundle/
+├── index.js              # Host half: tool + slash command + project context + LLM call
+├── client.js             # Client half: icon button + notes panel + locale dicts
+├── cordis.patch.yml      # Cordis Loader patch declaration
+├── package.json          # package manifest (dsh.bundle declaration)
+├── icon.svg              # Plugin display icon (Plugin Manager)
+├── screenshots.json      # storefront screenshot manifest
+├── LICENSE               # MIT
+├── README.md             # This file
+├── assets/
+│   ├── jt1.png           # Screenshot: toolbar button
+│   └── jt2.png           # Screenshot: notes panel
+├── locale/
+│   ├── en.json           # Plugin Manager display metadata (English)
+│   └── zh.json           # Plugin Manager display metadata (Chinese)
+└── test/
+    ├── parse-reply.test.mjs   # Parser tests + chained runner
+    ├── layout.mjs             # Layout contract checks
+    └── render.mjs             # Render smoke test (catches runtime crashes without a browser)
 ```
 
 ---
