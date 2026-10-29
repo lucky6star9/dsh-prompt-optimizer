@@ -16,6 +16,16 @@ Manually triggered via a composer icon button and an agent tool — it never aut
 
 Click the **light bulb** icon next to the send button. The plugin reads your workspace's file structure, key config files (`package.json`, `tsconfig.json`, etc.), and source code conventions, sends them together with your draft prompt to the LLM, and writes back an optimized version. The optimization notes appear in a panel above the input box.
 
+### Screenshots
+
+The optimize button in the composer toolbar:
+
+![The optimize button in the composer toolbar](assets/jt1.png)
+
+The notes panel above the input box after optimization:
+
+![The notes panel above the input box](assets/jt2.png)
+
 ### Features
 
 | Feature | Description |
@@ -82,6 +92,16 @@ prompt-optimizer-bundle/
 ### 这个插件做什么
 
 点击发送按钮旁边的**灯泡**图标，插件会读取你工作目录的文件结构、关键配置文件（`package.json`、`tsconfig.json` 等）和代码约定，连同你的草稿一起发给 LLM，然后把优化后的提示词写回输入框。优化说明显示在输入框上方的面板里。
+
+### 截图
+
+输入框工具栏中的优化按钮：
+
+![输入框工具栏中的优化按钮](assets/jt1.png)
+
+优化后显示在输入框上方的说明面板：
+
+![输入框上方的说明面板](assets/jt2.png)
 
 ### 功能
 
