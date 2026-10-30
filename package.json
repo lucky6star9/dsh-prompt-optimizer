@@ -8,7 +8,7 @@
   "author": "luckystar6",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lucky9star6/dsh-prompt-optimizer.git"
+    "url": "https://github.com/lucky6star9/dsh-prompt-optimizer.git"
   },
   "exports": {
     ".": "./index.js",

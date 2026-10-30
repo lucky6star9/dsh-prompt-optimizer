@@ -60,7 +60,7 @@
 ### 安装
 
 ```bash
-dsh plugin add https://github.com/lucky9star6/dsh-prompt-optimizer
+dsh plugin add https://github.com/lucky6star9/dsh-prompt-optimizer
 ```
 
 安装后在 DSH 的插件管理器里启用这个 bundle。
@@ -141,7 +141,7 @@ The host scans the working directory for:
 ### Install
 
 ```bash
-dsh plugin add https://github.com/lucky9star6/dsh-prompt-optimizer
+dsh plugin add https://github.com/lucky6star9/dsh-prompt-optimizer
 ```
 
 Then enable the bundle in your DSH profile via the Plugin Manager.
